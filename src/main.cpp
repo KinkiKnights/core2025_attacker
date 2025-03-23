@@ -67,7 +67,9 @@ public:
     float turn_s;
     float turn_e;
     float turn_t;
+    float turn_c;
     float turn_d;
+    float turn_m;
     float c610_e;
     float c610_t;
     float c610_f;
@@ -76,6 +78,13 @@ public:
 
     float br_left;
     float br_right;
+
+    int32_t encValidate(int32_t val){
+        if (val > 0x8000)
+            return val - 0xFFFF;
+        else 
+            return val; 
+    }
 
     void c610_callback(const kk_driver_msg::msg::C610Status::SharedPtr msg){
         c610_e = msg->position[0];
@@ -98,7 +107,8 @@ public:
             c610_e = msg->pos[1];
         };   // 基板CAN子ID
 
-        printf("turn_e=%f\n", turn_e);
+        turn_c = encValidate(turn_e);
+        printf("turn_c=%f\n", turn_c);
         
     }
 
@@ -195,26 +205,28 @@ public:
         
         if(msg->limit == 0){
             tt_duty = 0;
-            turn_s = turn_e;
-            turn_s = turn_s + 1900;
+            turn_s = turn_c;
+            turn_s = turn_s + 1400;
             turn_ok = 1;
         }
 
         if(turn_ok == 1){
             tt_duty = -0x0F4240;
-            if (turn_e >= turn_s){
+            if (turn_c >= turn_s){
                 tt_duty = 0;
-                turn_s = turn_e;
+                turn_s = turn_c;
                 turn_ok = 2;
             }
         }
 
         if(turn_ok == 2){
-            turn_d = msg->cmd[2] - 0x7F;
+            //turn_d = msg->cmd[2] - 0x7F;
+            turn_m = turn_s + (msg->cmd[2] - 0x7F);
+            turn_d = turn_c - turn_m;
             printf("turn_d=%f\n", turn_d);
-            tt_duty = turn_d * 0x1388;
-            if(turn_e >= (turn_s + 2000) || turn_e <= (turn_s - 2000)){
-                tt_duty = 0x0F4240;
+            tt_duty = turn_d * 0x0BB8;
+            if(turn_c >= (turn_s + 1300) || turn_c <= (turn_s - 1300)){
+                tt_duty = 0x0;
                 turn_ok = 0;
             }
         }
@@ -309,9 +321,9 @@ public:
 
         printf("tt_rot=%f\n", tt_rot);*/
 
-        if(begin == 0){
-            br_left = 0x419CE0;
-            br_right = 0x419CE0;
+        if(begin == 0 && msg->cmd[1] == 0x00){
+            br_left = 0x5FFFFF;
+            br_right = 0x5FFFFF;
 
             bldc_cmd_msg.child_id = 0;
             bldc_cmd_msg.port.resize(2);
@@ -330,14 +342,15 @@ public:
         }
 
         if (msg->cmd[1] == 0x04 || msg->cmd[1] == 0x05 ){ //射出モード切替
-            br_left = 0x419CE0;
-            br_right = 0x419CE0;
+            br_left = 0x5FFFFF;
+            br_right = 0x5FFFFF;
         } else if(msg->cmd[7] == 0x04){
             br_left = 0x000000;
             br_right = 0x000000;
+            begin = 0;
         } else {
-            br_left = 0x0020F0;
-            br_right = 0x0020F0;
+            br_left = 0x1FFFFF;
+            br_right = 0x1FFFFF;
         }
 
         bldc_cmd_msg.child_id = 0;
